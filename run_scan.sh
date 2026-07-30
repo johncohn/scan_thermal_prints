@@ -1,10 +1,14 @@
 #!/bin/bash
-# Watch the NM-1000, scan each strip at 300dpi color, split/deskew/crop, save as grayscale JPEGs.
+# Watch incoming/ for scans saved there by Image Capture, split/deskew/crop
+# each strip, and save grayscale JPEGs to output/.
+#
+# Scanning itself is still manual: open Image Capture, select the scanner,
+# set its destination folder to incoming/ (300dpi, Color), then load a strip
+# and click Scan (see README.md for why full automation isn't possible here).
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
+source .venv/bin/activate
 
-python3 scan_watch.py \
-    --resolution 300 \
-    --mode Color \
-    --process \
+python3 watch_folder.py \
+    --dpi 300 \
     --grayscale-output
