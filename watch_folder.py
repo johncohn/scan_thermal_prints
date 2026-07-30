@@ -49,13 +49,19 @@ def main():
     print("point Image Capture's scan destination at this folder, then load a strip and click Scan.")
 
     last_sizes = {}
+    warned = set()
     n = 0
     try:
         while True:
-            candidates = sorted(
-                p for p in watch_dir.iterdir()
-                if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
-            )
+            all_files = [p for p in watch_dir.iterdir() if p.is_file() and not p.name.startswith(".")]
+            for p in all_files:
+                if p.suffix.lower() not in IMAGE_EXTENSIONS and p not in warned:
+                    print(f"skipping {p.name}: unrecognized format {p.suffix!r} "
+                          f"(expected one of {sorted(IMAGE_EXTENSIONS)} -- "
+                          f"check Image Capture's scan Format setting)", file=sys.stderr)
+                    warned.add(p)
+
+            candidates = sorted(p for p in all_files if p.suffix.lower() in IMAGE_EXTENSIONS)
             for path in candidates:
                 if not is_stable(path, last_sizes):
                     continue

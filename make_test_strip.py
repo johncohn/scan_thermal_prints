@@ -25,6 +25,10 @@ def make_halftone_photo(w: int, h: int, seed: int) -> np.ndarray:
     pattern = (np.sin(xx * np.pi / dot_period) * np.sin(yy * np.pi / dot_period))
     pattern = (pattern - pattern.min()) / (pattern.max() - pattern.min())
     halftone = np.where(pattern * 255 > base, 255, 0).astype(np.uint8)
+    # Real scans arrive with the dots already optically softened (scanner
+    # resolution vs. print resolution); without that, a hard binary dot
+    # pattern doesn't behave like real halftone under a median blur.
+    halftone = cv2.GaussianBlur(halftone, (0, 0), sigmaX=1.2)
 
     photo = cv2.cvtColor(halftone, cv2.COLOR_GRAY2BGR)
     cv2.rectangle(photo, (2, 2), (w - 3, h - 3), (0, 0, 0), 3)  # thin printed border
@@ -68,7 +72,7 @@ def main():
     gap = int(0.5 * dpi)
     strip_h = gap + args.n_photos * (photo_h + gap)
 
-    canvas = np.full((strip_h, strip_w, 3), 250, dtype=np.uint8)  # off-white receipt paper
+    canvas = np.full((strip_h, strip_w, 3), 195, dtype=np.uint8)  # receipt paper (real scans read ~180-199, not pure white)
 
     rng = np.random.default_rng(42)
     for i in range(args.n_photos):

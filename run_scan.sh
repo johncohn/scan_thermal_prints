@@ -1,14 +1,13 @@
 #!/bin/bash
-# Watch incoming/ for scans saved there by Image Capture, split/deskew/crop
-# each strip, and save grayscale JPEGs to output/.
-#
-# Scanning itself is still manual: open Image Capture, select the scanner,
-# set its destination folder to incoming/ (300dpi, Color), then load a strip
-# and click Scan (see README.md for why full automation isn't possible here).
+# Fully automatic: watches the feeder, scans each strip itself (no Image
+# Capture needed), splits/deskews/crops, and saves grayscale JPEGs to
+# output/. Just load a strip and this handles the rest.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 source .venv/bin/activate
 
-python3 watch_folder.py \
-    --dpi 300 \
+python3 scan_loop.py \
+    --resolution 300 \
+    --mode Color \
+    --process \
     --grayscale-output
