@@ -3,25 +3,45 @@
 Automates scanning and processing strips of photos from a kid's thermal
 photo-printing camera (halftone B&W images on receipt paper), using a
 NeatReceipts NM-1000: detects when a strip is loaded, scans it, splits it
-into individual photos, deskews and crops each one, and saves them as
-JPEGs.
+into individual photos, deskews and crops each one, names them
+sequentially under a batch name you provide, and uploads them to a Google
+Drive folder.
 
 ## How it works
 
 1. **`scan_loop.py`** drives the scanner directly via Apple's
-   `ImageCaptureCore` framework (no Image Capture.app needed) -- polls for
-   a loaded strip, scans it, and hands the result to `process_strip.py`.
+   `ImageCaptureCore` framework (no Image Capture.app needed) -- prompts
+   for a batch name (event/date/etc.), then polls for a loaded strip, scans
+   it, and hands the result to `process_strip.py`.
 2. **`process_strip.py`** takes a raw scan (one strip, possibly containing
    several photos separated by blank paper) and:
    - separates photo content from both the blank paper gaps *and* the
      scanner's solid-black background (see "Segmentation" below)
    - finds each photo's bounding box and rotation angle, deskews and crops it
    - rotates it upright (this camera prints sideways relative to the
-     strip's feed direction) and saves it as its own JPEG in `output/`
+     strip's feed direction) and saves it as `{batch_name}_NNN.jpg` in
+     `output/`, continuing the sequence across strips
+3. **`drive_upload.py`** uploads each strip's new JPEGs into a Drive
+   subfolder named after the batch, via `rclone`, skipping any file that's
+   already there (dedup).
 
 Color scanning is used even though the source prints are B&W, since it
 reduces moire artifacts on the halftone dots. Use `--grayscale-output` to
 convert the final crops to true grayscale JPEGs regardless of scan mode.
+
+### Batch naming
+
+At startup you're prompted for a name (an event, a date, whatever) -- press
+Enter to default to today's date. All photos scanned from then on are
+named `{batch_name}_001.jpg`, `{batch_name}_002.jpg`, etc., continuing
+across strips (checked against what's already in `output/`, so restarting
+the script resumes numbering correctly instead of overwriting). Type a new
+name at any time while it's running and press Enter to switch batches --
+no restart needed. Photos previously identified by the embedded per-photo
+timestamp were considered, but that text is burned into the halftone print
+itself and came out unreadable by OCR even after heavy preprocessing (see
+git history) -- naming by a user-supplied batch name instead sidesteps that
+entirely.
 
 ## Getting requestScan() to actually work
 
@@ -83,6 +103,24 @@ pip install --index-url https://pypi.org/simple -r requirements.txt
 (The `--index-url` override is needed if pip is configured to use an
 internal package mirror that doesn't carry the PyObjC framework packages.)
 
+### Google Drive (one-time)
+
+Uploads go through `rclone`, targeting a Drive remote named `gdrive` rooted
+at the destination folder:
+
+```
+brew install rclone
+rclone authorize "drive"   # opens a browser; log in and grant access, paste the printed token below
+rclone config create gdrive drive token='<paste the token JSON printed above>' root_folder_id='<drive folder id, from its URL>'
+```
+
+The folder ID is the long string in the folder's URL:
+`drive.google.com/drive/folders/<this part>`. Verify it worked with
+`rclone lsf gdrive:`. Note: rclone currently warns its shared
+`client_id` is being retired sometime in 2026 -- works today, but for
+long-term reliability see rclone's docs on creating your own client ID
+(`rclone.org/drive/#making-your-own-client-id`).
+
 ## Usage
 
 ```
@@ -90,11 +128,13 @@ source .venv/bin/activate
 ./run_scan.sh
 ```
 
-Load a strip -- it's detected, scanned, and split/cropped JPEGs appear in
-`output/` automatically. The paper ejects itself; no need to pull it out.
-`scan_loop.py` keeps running afterward, so just cut the next strip off the
-roll and feed it in whenever you're ready -- one run handles as many
-strips as you want, back to back.
+You'll be prompted for a batch name, then: load a strip -- it's detected,
+scanned, split/cropped JPEGs appear in `output/`, and they're uploaded to
+the matching Drive subfolder, all automatically. The paper ejects itself;
+no need to pull it out. `scan_loop.py` keeps running afterward, so just cut
+the next strip off the roll and feed it in whenever you're ready -- one run
+handles as many strips (and batches -- type a new name any time) as you
+want, back to back.
 
 The scanner's hardware/driver cap is 8.5" x 30" (confirmed via
 `physicalSizeInInches`), but that's a hard ceiling, not a safe target --

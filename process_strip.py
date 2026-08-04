@@ -99,7 +99,8 @@ ROTATIONS = {
 
 def process(src: Path, out_dir: Path, dpi: int, min_photo_in2: float,
             pad_in: float, jpeg_quality: int, grayscale_output: bool = False,
-            bg_cutoff: int = 25, paper_cutoff: int = 170, rotate: str = "cw") -> list[Path]:
+            bg_cutoff: int = 25, paper_cutoff: int = 170, rotate: str = "cw",
+            name_stem: str | None = None, start_index: int = 1, verbose: bool = True) -> list[Path]:
     img = load_image(src)
     contours = find_photo_regions(img, dpi, min_photo_in2, bg_cutoff, paper_cutoff)
     if not contours:
@@ -108,10 +109,10 @@ def process(src: Path, out_dir: Path, dpi: int, min_photo_in2: float,
 
     out_dir.mkdir(parents=True, exist_ok=True)
     pad_px = int(pad_in * dpi)
-    stem = src.stem
+    stem = name_stem if name_stem is not None else src.stem
     rotate_code = ROTATIONS[rotate]
     written = []
-    for i, contour in enumerate(contours, start=1):
+    for offset, contour in enumerate(contours):
         crop = deskew_crop(img, contour, pad_px)
         if crop.size == 0:
             continue
@@ -119,10 +120,14 @@ def process(src: Path, out_dir: Path, dpi: int, min_photo_in2: float,
             crop = cv2.rotate(crop, rotate_code)
         if grayscale_output:
             crop = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        out_path = out_dir / f"{stem}_photo{i:02d}.jpg"
+        i = start_index + offset
+        suffix = f"{i:02d}" if name_stem is None else f"{i:03d}"
+        sep = "_photo" if name_stem is None else "_"
+        out_path = out_dir / f"{stem}{sep}{suffix}.jpg"
         cv2.imwrite(str(out_path), crop, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
         written.append(out_path)
-        print(f"  wrote {out_path} ({crop.shape[1]}x{crop.shape[0]})")
+        if verbose:
+            print(f"  wrote {out_path} ({crop.shape[1]}x{crop.shape[0]})")
     return written
 
 
@@ -146,6 +151,10 @@ def main():
     ap.add_argument("--rotate", choices=sorted(ROTATIONS), default="cw",
                      help="rotate each crop after deskewing (photos print sideways relative to the "
                           "strip's feed direction on this camera)")
+    ap.add_argument("--name-stem", default=None,
+                     help="name output files '{stem}_NNN.jpg' instead of '{input filename}_photoNN.jpg'")
+    ap.add_argument("--start-index", type=int, default=1,
+                     help="first index to use with --name-stem (for continuing a sequence across strips)")
     args = ap.parse_args()
 
     total = 0
@@ -153,7 +162,8 @@ def main():
         print(f"{src}:")
         total += len(process(src, args.out_dir, args.dpi, args.min_photo_in2, args.pad_in,
                               args.jpeg_quality, args.grayscale_output,
-                              args.bg_cutoff, args.paper_cutoff, args.rotate))
+                              args.bg_cutoff, args.paper_cutoff, args.rotate,
+                              args.name_stem, args.start_index))
     print(f"done: {total} photo(s) written to {args.out_dir}/")
 
 

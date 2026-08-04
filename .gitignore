@@ -4,3 +4,4 @@ __pycache__/
 .venv/
 incoming/
 output/
+.last_batch_name
